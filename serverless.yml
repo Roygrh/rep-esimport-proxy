@@ -1,0 +1,323 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: SAM template for the rep-esimport-proxy service in C#.
+Parameters:
+  QueueName:
+    Type: String
+    Description: Name of the SQS queue for receiving messages from SNS.
+    Default: client-tracking-sqs-queue
+  EventsBusName:
+    Type: String
+    Description: Name of the SNS topic for receiving events.
+    Default: eleven-event-bus-receive
+  EventsBusAccount:
+    Type: String
+    Description: AWS account ID for the SNS topic.
+  LogStreamName:
+    Type: String
+    Description: Name of the Firehose delivery stream for logging.
+    Default: applog-stream
+Global:
+  Function:
+    Timeout: 120
+    MemorySize: 128
+    Runtime: dotnet8
+  
+Resources:
+  # SQS Queue for receiving messages from SNS
+  ClientTrackingSQSQueue:
+    Type: AWS::SQS::Queue
+    Properties: 
+      QueueName: !Sub '${AWS::StackName}-sqs'
+      VisibilityTimeout: 60
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt ClientTrackingDLQ.Arn
+        maxReceiveCount: 5
+
+  # Dead Letter Queue for SQS
+  ClientTrackingDLQ:
+    Type: AWS::SQS::Queue
+    Properties: 
+      QueueName: !Sub "${AWS::StackName}-dlq"
+
+  # SNS Subscription
+  ClientTrackingSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      Endpoint: !GetAtt ClientTrackingSQSQueue.Arn
+      Protocol: sqs
+      TopicArn: !Sub arn:aws:sns:${AWS::Region}:${EventsBusAccount}:${EventsBusName}-${AWS::Region}
+      FilterPolicy:
+        MessageBody:
+          type: "client-tracking"
+
+  # DynamoDB Table to store client tracking data
+  ClientTrackingTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: client-tracking-data
+      AttributeDefinitions:
+        - AttributeName: ID
+          AttributeType: S
+      KeySchema:
+        - AttributeName: ID
+          KeyType: HASH
+      BillingMode: PAY_PER_REQUEST
+      TimeToLiveSpecification:
+        AttributeName: ttl
+        Enabled: true
+
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: rep-esimport-proxy-lambda-role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: LambdaSQSAccessPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - sqs:ReceiveMessage
+                  - sqs:DeleteMessage
+                  - sqs:GetQueueAttributes
+                Resource: !GetAtt ClientTrackingSQSQueue.Arn
+              - Effect: Allow
+                Action:
+                  - dynamodb:PutItem
+                Resource: !GetAtt ClientTrackingTable.Arn
+              - Effect: Allow
+                Action:
+                  - firehose:PutRecord
+                Resource: !Sub 'arn:aws:firehose:${AWS::Region}:${AWS::AccountId}:deliverystream/${LogStreamName}'
+
+  ClientTrackingProcessorLambda:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: client-tracking-processor
+      Handler: rep-esimport-proxy::ClientTrackingSQSLambda.Function::FunctionHandler  
+      Role: !GetAtt LambdaExecutionRole.Arn
+      CodeUri: ./src/ClientTrackingSQSLambda/
+      Environment:
+        Variables:
+          DYNAMODB_TABLE_NAME: !Ref ClientTrackingTable
+      Events:
+        SQSTrigger:
+          Type: SQS
+          Properties:
+            Queue: !GetAtt ClientTrackingSQSQueue.Arn
+
+# CloudWatch Alarms for Lambda function
+  LambdaErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: LambdaErrorAlarm
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Statistic: Sum
+      Period: 60
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      AlarmActions: []
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref ClientTrackingProcessorLambda
+
+  LambdaThrottlingAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: LambdaThrottlingAlarm
+      MetricName: Throttles
+      Namespace: AWS/Lambda
+      Statistic: Sum
+      Period: 60
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      AlarmActions: []
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref ClientTrackingProcessorLambda
+
+  LambdaDurationAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: LambdaDurationAlarm
+      MetricName: Duration
+      Namespace: AWS/Lambda
+      Statistic: Average
+      Period: 60
+      EvaluationPeriods: 1
+      Threshold: 1000  # 1000 ms threshold
+      ComparisonOperator: GreaterThanThreshold
+      AlarmActions: []
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref ClientTrackingProcessorLambda
+
+  # SQS Metrics and Alarms
+  SQSMessageAgeAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: SQSMessageAgeAlarm
+      MetricName: ApproximateAgeOfOldestMessage
+      Namespace: AWS/SQS
+      Statistic: Maximum
+      Period: 60
+      EvaluationPeriods: 1
+      Threshold: 300  # 300 seconds threshold (5 minutes)
+      ComparisonOperator: GreaterThanThreshold
+      AlarmActions: []
+      Dimensions:
+        - Name: QueueName
+          Value: !Ref ClientTrackingSQSQueue
+
+  # DLQ Metrics and Alarms
+  DLQMessageReceivedAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: DLQMessageReceivedAlarm
+      MetricName: NumberOfMessagesReceived
+      Namespace: AWS/SQS
+      Statistic: Sum
+      Period: 60
+      EvaluationPeriods: 1
+      Threshold: 10  # If 10 messages are received, the DLQ is being used
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      AlarmActions: []
+      Dimensions:
+        - Name: QueueName
+          Value: !Ref ClientTrackingDLQ
+
+  # DynamoDB Metrics and Alarms
+  DynamoDBReadCapacityAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: DynamoDBReadCapacityAlarm
+      MetricName: ConsumedReadCapacityUnits
+      Namespace: AWS/DynamoDB
+      Statistic: Sum
+      Period: 60
+      EvaluationPeriods: 1
+      Threshold: 1000  # Adjust this based on your capacity settings
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      AlarmActions: []
+      Dimensions:
+        - Name: TableName
+          Value: !Ref ClientTrackingTable
+
+  DynamoDBWriteCapacityAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: DynamoDBWriteCapacityAlarm
+      MetricName: ConsumedWriteCapacityUnits
+      Namespace: AWS/DynamoDB
+      Statistic: Sum
+      Period: 60
+      EvaluationPeriods: 1
+      Threshold: 1000  # Adjust this based on your capacity settings
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      AlarmActions: []
+      Dimensions:
+        - Name: TableName
+          Value: !Ref ClientTrackingTable
+
+  ServiceDashboard:
+    Type: AWS::CloudWatch::Dashboard
+    Properties:
+      DashboardName: !Sub ${AWS::StackName}-dashboard
+      DashboardBody: 
+        !Sub |
+          {
+            "widgets": [
+              {
+                "type": "metric",
+                "x": 0,
+                "y": 0,
+                "width": 6,
+                "height": 6,
+                "properties": {
+                  "metrics": [
+                    [ "AWS/Lambda", "Invocations", "FunctionName", "${ClientTrackingProcessorLambda}" ],
+                    [ ".", "Errors", ".", ".", { "stat": "Sum" } ],
+                    [ ".", "Duration", ".", ".", { "stat": "Average" } ]
+                  ],
+                  "period": 300,
+                  "stat": "Sum",
+                  "region": "${AWS::Region}",
+                  "title": "Lambda Function Metrics"
+                }
+              },
+              {
+                "type": "metric",
+                "x": 6,
+                "y": 0,
+                "width": 6,
+                "height": 6,
+                "properties": {
+                  "metrics": [
+                    [ "AWS/SQS", "NumberOfMessagesReceived", "QueueName", "${ClientTrackingSQSQueue}" ],
+                    [ ".", "ApproximateAgeOfOldestMessage", ".", ".", { "stat": "Maximum" } ],
+                    [ ".", "ApproximateNumberOfMessagesVisible", ".", ".", { "stat": "Sum" } ]
+                  ],
+                  "period": 300,
+                  "stat": "Sum",
+                  "region": "${AWS::Region}",
+                  "title": "SQS Queue Metrics"
+                }
+              },
+              {
+                "type": "metric",
+                "x": 0,
+                "y": 6,
+                "width": 6,
+                "height": 6,
+                "properties": {
+                  "metrics": [
+                    [ "AWS/DynamoDB", "ConsumedReadCapacityUnits", "TableName", "${ClientTrackingTable}" ],
+                    [ ".", "ConsumedWriteCapacityUnits", ".", ".", { "stat": "Sum" } ],
+                    [ ".", "ProvisionedReadCapacityUnits", ".", ".", { "stat": "Average" } ],
+                    [ ".", "ProvisionedWriteCapacityUnits", ".", ".", { "stat": "Average" } ]
+                  ],
+                  "period": 300,
+                  "stat": "Sum",
+                  "region": "${AWS::Region}",
+                  "title": "DynamoDB Table Metrics"
+                }
+              },
+              {
+                "type": "metric",
+                "x": 6,
+                "y": 6,
+                "width": 6,
+                "height": 6,
+                "properties": {
+                  "metrics": [
+                    [ "AWS/SQS", "NumberOfMessagesReceived", "QueueName", "${ClientTrackingDLQ}" ]
+                  ],
+                  "period": 300,
+                  "stat": "Sum",
+                  "region": "${AWS::Region}",
+                  "title": "DLQ Metrics"
+                }
+              }
+            ]
+          }
+
+Outputs:
+
+  DynamoDBTableName:
+    Description: DynamoDB table for storing client tracking data.
+    Value: !Ref ClientTrackingTable
+
+  SQSQueueUrl:
+    Description: URL of the SQS queue that receives client tracking messages.
+    Value: !Ref ClientTrackingSQSQueue

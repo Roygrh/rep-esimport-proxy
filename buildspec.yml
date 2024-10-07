@@ -1,0 +1,87 @@
+version: '0.2'
+env:
+  git-credential-helper: yes
+  parameter-store:
+    GITHUB_ACCOUNT: /elevensoftware/build/github_account
+    GITHUB_PASSWORD: /elevensoftware/build/github_pass
+    GITHUB_USER_NAME: /elevensoftware/build/github_user
+    VERSION_HELPER: /elevensoftware/build/versionhelper
+    SONAR_TOKEN: /elevensoftware/build/sonartoken
+  shell: bash
+phases:
+  install:
+    commands:
+      - echo "Installing .net 6 sdk..."
+      - /usr/local/bin/dotnet-install.sh --channel 6.0
+      - echo "Installing SonarScanner..."
+      - dotnet tool install --global dotnet-sonarscanner
+      - echo "Installing coverlet.console..."
+      - dotnet tool install --global coverlet.console
+      - dotnet tool install --global Amazon.Lambda.Tools
+
+  pre_build: 
+    commands:
+      - echo '<?xml version="1.0" encoding="utf-8"?><configuration><packageSources><clear /><add key="github" value="https://nuget.pkg.github.com/'$GITHUB_ACCOUNT'/index.json" /><add key="nuget.org" value="https://api.nuget.org/v3/index.json" protocolVersion="3" /></packageSources><packageSourceCredentials><github><add key="Username" value="'$GITHUB_USER_NAME'" /><add key="ClearTextPassword" value="'$GITHUB_PASSWORD'" /></github></packageSourceCredentials></configuration>' > nuget.config #nuget credential injection
+      - aws s3 cp $VERSION_HELPER versionhelper.sh; chmod +x versionhelper.sh; . ./versionhelper.sh #determine semver and create buildinfo.json
+      
+      - export specifier=$(case $qualifier in "build") echo "$VERSION-$qualifier.$CODEBUILD_BUILD_NUMBER" ;; "release") echo "$VERSION" ;; "*") echo "$VERSION-$qualifier" ;; esac)
+      - export project=${PWD##*/}
+
+      # echo project info
+      - printf "%20s %-20s\n" \
+        "" "" \
+        "PROJECT INFO" "" \
+        "-------------" "" \
+        "Project:" "$project" \
+        "Version:" "${VERSION}" \
+        "Author:" "${CODEBUILD_GIT_AUTHOR}" \
+        "Author Email:" "${CODEBUILD_GIT_AUTHOR_EMAIL}" \
+        "Full Version:" "${ELEVEN_VERSION_FULL}" \
+        "Build Version:" "${ELEVEN_VERSION_BUILD}" \
+        "Alt Version:" "${ELEVEN_VERSION}" \
+        "Tag:" "${CODEBUILD_GIT_TAG}" 
+
+      # echo codebuild info
+      - printf "%20s %-20s\n" \
+        "" "" \
+        "CODEBUILD INFO" "" \
+        "-------------" "" \
+        "GitHub Account:" "${GITHUB_ACCOUNT}" \
+        "Branch:" "${CODEBUILD_GIT_BRANCH}" \
+        "Commit:" "${CODEBUILD_GIT_COMMIT}" \
+        "Source Version:" "${CODEBUILD_SOURCE_VERSION}" \
+        "Webook Trigger:" "${CODEBUILD_WEBHOOK_TRIGGER}" \
+        "Webook Base Ref:" "${CODEBUILD_WEBHOOK_BASE_REF}" \
+        "Webook Head Ref:" "${CODEBUILD_WEBHOOK_HEAD_REF}" \
+        "Eleven Account:" "${ELEVEN_BUILD_ACCOUNT}" \
+        "Source Directory:" "${CODEBUILD_SRC_DIR}"
+      
+      # build sonar cloud analysis configuration
+      - |-
+          if [[ ${CODEBUILD_WEBHOOK_TRIGGER} == 'pr/'* ]] ; then
+             export SQ_ANALYSIS_PARAMS="/d:sonar.pullrequest.key=${CODEBUILD_WEBHOOK_TRIGGER##*/} \
+                                        /d:sonar.pullrequest.branch=${CODEBUILD_WEBHOOK_HEAD_REF##refs/heads/} \
+                                        /d:sonar.pullrequest.base=${CODEBUILD_WEBHOOK_BASE_REF##refs/heads/}"
+          else
+             export SQ_ANALYSIS_PARAMS="/d:sonar.branch.name=$CODEBUILD_GIT_BRANCH"
+          fi
+
+      #inject version into cloudformation template (NOT NEEDED CURRENTLY)
+      # - sed -i 's/VERSIONREPLACE/'$ELEVEN_VERSION_BUILD'/g' serverless.yml
+  build:
+    commands:
+      - dotnet sonarscanner begin /o:$GITHUB_ACCOUNT /k:${GITHUB_ACCOUNT}_$project /d:sonar.host.url=https://sonarcloud.io  /d:sonar.login=$SONAR_TOKEN /d:sonar.cs.opencover.reportsPaths="${CODEBUILD_SRC_DIR}/build/coverage.xml" /d:sonar.coverage.exclusions="**Test*.cs" $SQ_ANALYSIS_PARAMS
+      - echo "Starting build..."
+      - dotnet clean rep-esimport-proxy.sln
+      - dotnet publish rep-esimport-proxy.sln -c Release -fl /p:PublishReadyToRun=false --self-contained false /p:DebugSymbols=false /p:DebugType=none -o ./build /p:MaxCpuCount=1
+      - cp serverless.yml build
+      - cp buildinfo.json build
+      - dotnet test /p:CollectCoverage=true /p:CoverletOutputFormat=opencover /p:CoverletOutputVerbosity=detailed /p:CoverletOutput="${CODEBUILD_SRC_DIR}/build/coverage.xml" /p:Exclude="[Tests]*"
+      - dotnet sonarscanner end /d:sonar.token=$SONAR_TOKEN
+  post_build:
+    commands:
+      
+artifacts: 
+  files:
+    - '**/*'
+  base-directory: build

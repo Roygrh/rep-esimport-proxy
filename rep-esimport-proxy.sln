@@ -1,0 +1,36 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{8DE7C1B7-19B0-4E15-99D7-49D0E6EA91A2}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ClientTrackingSQSLambda", "src\ClientTrackingSQSLambda\ClientTrackingSQSLambda.csproj", "{9E2B29C6-C98F-482D-9C8C-0002F499018A}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "test", "test", "{3A57C52F-AA0E-4200-94DA-6E225BCE65A7}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ClientTrackingSQSLambda.Tests", "test\ClientTrackingSQSLambda.Tests\ClientTrackingSQSLambda.Tests.csproj", "{BF738593-E312-4874-9A5E-E59415F13559}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{9E2B29C6-C98F-482D-9C8C-0002F499018A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{9E2B29C6-C98F-482D-9C8C-0002F499018A}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{9E2B29C6-C98F-482D-9C8C-0002F499018A}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{9E2B29C6-C98F-482D-9C8C-0002F499018A}.Release|Any CPU.Build.0 = Release|Any CPU
+		{BF738593-E312-4874-9A5E-E59415F13559}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{BF738593-E312-4874-9A5E-E59415F13559}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{BF738593-E312-4874-9A5E-E59415F13559}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{BF738593-E312-4874-9A5E-E59415F13559}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{9E2B29C6-C98F-482D-9C8C-0002F499018A} = {8DE7C1B7-19B0-4E15-99D7-49D0E6EA91A2}
+		{BF738593-E312-4874-9A5E-E59415F13559} = {3A57C52F-AA0E-4200-94DA-6E225BCE65A7}
+	EndGlobalSection
+EndGlobal

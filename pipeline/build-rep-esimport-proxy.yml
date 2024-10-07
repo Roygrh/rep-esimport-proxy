@@ -1,0 +1,32 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "UPDATE ME"
+Parameters:
+  TemplateUrlSSM:
+    Type: AWS::SSM::Parameter::Value<String>
+    Default: /elevensoftware/build/SAMPipelineUrl
+Mappings: 
+  AccountMapping: 
+    Reporting:
+      Development: 512337418224 
+      Staging: 265848155493 
+      Production: 421870691823 
+    Monolith:
+      Development: 489354756207 
+      Staging: 604057372515 
+      Production: 615423619382 
+Resources:
+  Dev: 
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: !Ref TemplateUrlSSM
+      Parameters:
+        GithubRepository: rep-esimport-proxy
+        GithubBranch: develop
+        StackName: rep-esimport-proxy
+        SlackEmail: ''
+        CustomBuildspec: true
+        DevelopmentAccount:  !FindInMap [AccountMapping, Reporting, Development]
+        DeleteDevelopmentStackUponApproval: false
+        ServiceGroup: rep-esimport-proxy
+        Contact: reporting 
+        Datadog: false
