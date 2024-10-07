@@ -23,6 +23,7 @@ Resources:
         GithubRepository: rep-esimport-proxy
         GithubBranch: develop
         StackName: rep-esimport-proxy
+        DotNetRuntime: '8.0'
         SlackEmail: ''
         CustomBuildspec: true
         DevelopmentAccount:  !FindInMap [AccountMapping, Reporting, Development]
