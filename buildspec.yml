@@ -11,8 +11,8 @@ env:
 phases:
   install:
     commands:
-      - echo "Installing .net 6 sdk..."
-      - /usr/local/bin/dotnet-install.sh --channel 6.0
+      - echo "Installing .net 8 sdk..."
+      - /usr/local/bin/dotnet-install.sh --channel 8.0
       - echo "Installing SonarScanner..."
       - dotnet tool install --global dotnet-sonarscanner
       - echo "Installing coverlet.console..."
