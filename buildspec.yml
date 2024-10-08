@@ -11,12 +11,10 @@ env:
 phases:
   install:
     commands:
+      - echo "Uninstalling all .NET 6 SDK versions..."
+      - rm -rf /root/.dotnet/sdk/*
       - echo "Installing .NET 8 SDK..."
       - /usr/local/bin/dotnet-install.sh --channel 8.0
-      - export DOTNET_ROOT=/root/.dotnet
-      - export PATH="$DOTNET_ROOT:$DOTNET_ROOT/tools:$PATH"
-      - $DOTNET_ROOT/dotnet --list-sdks  # Verify .NET 8 SDK is installed
-      - $DOTNET_ROOT/dotnet --version    # This should return .NET 8 version
       - dotnet --version  # This should now return .NET 8
       - echo "Installing SonarScanner..."
       - dotnet tool install --global dotnet-sonarscanner
