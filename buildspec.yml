@@ -15,12 +15,9 @@ phases:
       - /usr/local/bin/dotnet-install.sh --channel 8.0
       - export DOTNET_ROOT=/root/.dotnet
       - export PATH="$DOTNET_ROOT:$DOTNET_ROOT/tools:$PATH"
-      - dotnet --list-sdks  # This should list .NET 8
-      - if [ -x "$DOTNET_ROOT/dotnet" ]; then
-          alias dotnet="$DOTNET_ROOT/dotnet";
-        fi
+      - $DOTNET_ROOT/dotnet --list-sdks  # Verify .NET 8 SDK is installed
+      - $DOTNET_ROOT/dotnet --version    # This should return .NET 8 version
       - dotnet --version  # This should now return .NET 8
-      - dotnet --version
       - echo "Installing SonarScanner..."
       - dotnet tool install --global dotnet-sonarscanner
       - echo "Installing coverlet.console..."
