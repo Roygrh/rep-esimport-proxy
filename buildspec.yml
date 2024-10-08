@@ -13,13 +13,13 @@ phases:
     commands:
       - echo "Installing .net 8 sdk..."
       - /usr/local/bin/dotnet-install.sh --channel 8.0
+      - export PATH="$PATH:/root/.dotnet"
+      - dotnet --version
       - echo "Installing SonarScanner..."
       - dotnet tool install --global dotnet-sonarscanner
       - echo "Installing coverlet.console..."
       - dotnet tool install --global coverlet.console
       - dotnet tool install --global Amazon.Lambda.Tools
-      - dotnet --version
-      - export PATH="$PATH:/root/.dotnet"
   pre_build: 
     commands:
       - echo '<?xml version="1.0" encoding="utf-8"?><configuration><packageSources><clear /><add key="github" value="https://nuget.pkg.github.com/'$GITHUB_ACCOUNT'/index.json" /><add key="nuget.org" value="https://api.nuget.org/v3/index.json" protocolVersion="3" /></packageSources><packageSourceCredentials><github><add key="Username" value="'$GITHUB_USER_NAME'" /><add key="ClearTextPassword" value="'$GITHUB_PASSWORD'" /></github></packageSourceCredentials></configuration>' > nuget.config #nuget credential injection
