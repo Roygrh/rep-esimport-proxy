@@ -69,18 +69,21 @@ phases:
       # - sed -i 's/VERSIONREPLACE/'$ELEVEN_VERSION_BUILD'/g' serverless.yml
   build:
     commands:
-      - dotnet sonarscanner begin /o:$GITHUB_ACCOUNT /k:${GITHUB_ACCOUNT}_$project /d:sonar.host.url=https://sonarcloud.io  /d:sonar.login=$SONAR_TOKEN /d:sonar.cs.opencover.reportsPaths="${CODEBUILD_SRC_DIR}/build/coverage.xml" /d:sonar.coverage.exclusions="**Test*.cs" $SQ_ANALYSIS_PARAMS
-      - echo "Starting build..."
-      # - dotnet clean rep-esimport-proxy.sln
-      - dotnet publish rep-esimport-proxy.sln -c Release -fl /p:PublishReadyToRun=false --self-contained false /p:DebugSymbols=false /p:DebugType=none -o ./build /p:MaxCpuCount=1
-      - cp serverless.yml build
-      - cp buildinfo.json build
-      - dotnet test /p:CollectCoverage=true /p:CoverletOutputFormat=opencover /p:CoverletOutputVerbosity=detailed /p:CoverletOutput="${CODEBUILD_SRC_DIR}/build/coverage.xml" /p:Exclude="[Tests]*"
+      - dotnet sonarscanner begin /o:$GITHUB_ACCOUNT /k:${GITHUB_ACCOUNT}_$project /d:sonar.host.url=https://sonarcloud.io  /d:sonar.login=$SONAR_TOKEN /d:sonar.cs.opencover.reportsPaths="${CODEBUILD_SRC_DIR}/coverage.xml" /d:sonar.coverage.exclusions="**Test*.cs" $SQ_ANALYSIS_PARAMS
+      - echo "Starting build..."              
+      - aws s3 cp $VERSION_HELPER versionhelper.sh; chmod +x versionhelper.sh; . ./versionhelper.sh 
+      - sam build --template $TEMPLATE_PATH  
+      - dotnet test /p:CollectCoverage=true /p:CoverletOutputFormat=opencover /p:CoverletOutputVerbosity=detailed /p:CoverletOutput="${CODEBUILD_SRC_DIR}/coverage.xml" /p:Exclude="[Tests]*"
       - dotnet sonarscanner end /d:sonar.token=$SONAR_TOKEN
+      - sam package --s3-bucket $ARTIFACT_BUCKET-us-east-1 --kms-key-id $KMS_KEY_ID_EAST_1 --region us-east-1 --s3-prefix SAM/$PROJECT/$ELEVEN_VERSION_FULL --output-template-file packaged_template-us-east-1.yml
+      - sam package --s3-bucket $ARTIFACT_BUCKET-us-east-2 --kms-key-id $KMS_KEY_ID_EAST_2 --region us-east-2 --s3-prefix SAM/$PROJECT/$ELEVEN_VERSION_FULL --output-template-file packaged_template-us-east-2.yml
+      - sam package --s3-bucket $ARTIFACT_BUCKET-us-west-2 --kms-key-id $KMS_KEY_ID_WEST_2 --region us-west-2 --s3-prefix SAM/$PROJECT/$ELEVEN_VERSION_FULL --output-template-file packaged_template-us-west-2.yml
+      - sam package --s3-bucket $ARTIFACT_BUCKET-eu-west-1 --kms-key-id $KMS_KEY_ID_EU_WEST_1 --region eu-west-1 --s3-prefix SAM/$PROJECT/$ELEVEN_VERSION_FULL --output-template-file packaged_template-eu-west-1.yml
+      - sam package --s3-bucket $ARTIFACT_BUCKET-eu-west-2 --kms-key-id $KMS_KEY_ID_EU_WEST_2 --region eu-west-2 --s3-prefix SAM/$PROJECT/$ELEVEN_VERSION_FULL --output-template-file packaged_template-eu-west-2.yml
+      - sam package --s3-bucket $ARTIFACT_BUCKET-eu-central-1 --kms-key-id $KMS_KEY_ID_EU_CENTRAL_1 --region eu-central-1 --s3-prefix SAM/$PROJECT/$ELEVEN_VERSION_FULL --output-template-file packaged_template-eu-central-1.yml
   post_build:
-    commands:
-      
+    commands:    
 artifacts: 
   files:
-    - '**/*'
-  base-directory: build
+    - packaged_template*.yml 
+    - buildinfo.json
