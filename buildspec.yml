@@ -11,11 +11,12 @@ env:
 phases:
   install:
     commands:
-      - echo "Uninstalling all .NET 6 SDK versions..."
-      - rm -rf /root/.dotnet/sdk/*
+      # - echo "Uninstalling all .NET 6 SDK versions..."
+      # - rm -rf /root/.dotnet/sdk/*
+      - rm -f /codebuild/global.json
       - echo "Installing .NET 8 SDK..."
       - /usr/local/bin/dotnet-install.sh --channel 8.0
-      - dotnet --version  # This should now return .NET 8
+      - dotnet --version  # This should now return .NET 8- echo "Removing global.json to avoid SDK conflicts..."
       - echo "Installing SonarScanner..."
       - dotnet tool install --global dotnet-sonarscanner
       - echo "Installing coverlet.console..."
