@@ -31,3 +31,7 @@ Resources:
         ServiceGroup: rep-esimport-proxy
         Contact: reporting 
         Datadog: false
+        DevelopmentParameters: |
+          {
+            "EventsBusAccount": "489354756207"
+          }
