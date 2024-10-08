@@ -17,7 +17,7 @@ Parameters:
     Type: String
     Description: Name of the Firehose delivery stream for logging.
     Default: applog-stream
-Global:
+Globals:
   Function:
     Timeout: 120
     MemorySize: 128
