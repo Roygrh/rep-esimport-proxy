@@ -18,6 +18,7 @@ phases:
       - echo "Installing coverlet.console..."
       - dotnet tool install --global coverlet.console
       - dotnet tool install --global Amazon.Lambda.Tools
+      - dotnet --version
 
   pre_build: 
     commands:
@@ -72,7 +73,7 @@ phases:
     commands:
       - dotnet sonarscanner begin /o:$GITHUB_ACCOUNT /k:${GITHUB_ACCOUNT}_$project /d:sonar.host.url=https://sonarcloud.io  /d:sonar.login=$SONAR_TOKEN /d:sonar.cs.opencover.reportsPaths="${CODEBUILD_SRC_DIR}/build/coverage.xml" /d:sonar.coverage.exclusions="**Test*.cs" $SQ_ANALYSIS_PARAMS
       - echo "Starting build..."
-      - dotnet clean rep-esimport-proxy.sln
+      # - dotnet clean rep-esimport-proxy.sln
       - dotnet publish rep-esimport-proxy.sln -c Release -fl /p:PublishReadyToRun=false --self-contained false /p:DebugSymbols=false /p:DebugType=none -o ./build /p:MaxCpuCount=1
       - cp serverless.yml build
       - cp buildinfo.json build
