@@ -14,6 +14,7 @@ phases:
       - echo "Installing .net 8 sdk..."
       - /usr/local/bin/dotnet-install.sh --channel 8.0
       - export PATH="$PATH:/root/.dotnet"
+      - source /root/.bashrc
       - dotnet --version
       - echo "Installing SonarScanner..."
       - dotnet tool install --global dotnet-sonarscanner
