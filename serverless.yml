@@ -46,7 +46,7 @@ Resources:
     Properties:
       Endpoint: !GetAtt ClientTrackingSQSQueue.Arn
       Protocol: sqs
-      TopicArn: !Sub arn:aws:sns:${AWS::Region}:${EventsBusAccount}:${EventsBusName}-${AWS::Region}
+      TopicArn: !Sub arn:aws:sns:${AWS::Region}:${EventsBusAccount}:${EventsBusName}
       FilterPolicy:
         MessageBody:
           type: "client-tracking"
