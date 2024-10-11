@@ -47,10 +47,11 @@ Resources:
       Endpoint: !GetAtt ClientTrackingSQSQueue.Arn
       Protocol: sqs
       TopicArn: !Sub arn:aws:sns:${AWS::Region}:${EventsBusAccount}:${EventsBusName}
+      FilterPolicyScope: MessageBody
       FilterPolicy:
-        MessageBody:
-          type: 
-            - client-tracking
+        event: 
+          - client-tracking
+            
 
   # DynamoDB Table to store client tracking data
   ClientTrackingTable:
