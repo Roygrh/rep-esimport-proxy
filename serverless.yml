@@ -49,7 +49,8 @@ Resources:
       TopicArn: !Sub arn:aws:sns:${AWS::Region}:${EventsBusAccount}:${EventsBusName}
       FilterPolicy:
         MessageBody:
-          type: "client-tracking"
+          type: 
+            - client-tracking
 
   # DynamoDB Table to store client tracking data
   ClientTrackingTable:
