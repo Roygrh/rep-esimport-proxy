@@ -19,8 +19,8 @@ Parameters:
     Default: applog-stream
 Globals:
   Function:
-    Timeout: 120
-    MemorySize: 128
+    Timeout: 60
+    MemorySize: 256
     Runtime: dotnet8
   
 Resources:
