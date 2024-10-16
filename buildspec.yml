@@ -20,7 +20,44 @@ phases:
       - dotnet tool install --global Amazon.Lambda.Tools
   pre_build: 
     commands:
-      - echo '<?xml version="1.0" encoding="utf-8"?><configuration><packageSources><clear /><add key="github" value="https://nuget.pkg.github.com/'$GITHUB_ACCOUNT'/index.json" /><add key="nuget.org" value="https://api.nuget.org/v3/index.json" protocolVersion="3" /></packageSources><packageSourceCredentials><github><add key="Username" value="'$GITHUB_USER_NAME'" /><add key="ClearTextPassword" value="'$GITHUB_PASSWORD'" /></github></packageSourceCredentials></configuration>' > nuget.config #nuget credential injection
+      - | 
+        echo '<?xml version="1.0" encoding="utf-8"?>
+              <configuration>
+                <packageSources>
+                  <clear />
+                  <add key="github" value="https://nuget.pkg.github.com/'$GITHUB_ACCOUNT'/index.json" />
+                  <add key="nuget.org" value="https://api.nuget.org/v3/index.json" protocolVersion="3" />
+                </packageSources>
+                <packageSourceCredentials>
+                  <github>
+                    <add key="Username" value="'$GITHUB_USER_NAME'" />
+                    <add key="ClearTextPassword" value="'$GITHUB_PASSWORD'" />
+                  </github>
+                </packageSourceCredentials>
+              </configuration>' > nuget.config
+      - echo "Creating coverage.runsettings"
+      - |
+        echo '<RunSettings>
+          <RunConfiguration>
+            <ResultsDirectory>./coverage</ResultsDirectory>
+          </RunConfiguration>
+          <DataCollectionRunSettings>
+            <DataCollectors>
+              <DataCollector friendlyName="XPlat Code Coverage">
+                <Configuration>
+                  <Format>opencover</Format>
+                  <CodeCoverage>
+                    <ModulePaths>
+                      <Exclude>
+                        <ModulePath>.*Test.*</ModulePath>
+                      </Exclude>
+                    </ModulePaths>
+                  </CodeCoverage>
+                </Configuration>
+              </DataCollector>
+            </DataCollectors>
+          </DataCollectionRunSettings>
+        </RunSettings>' > coverage.runsettings
       - aws s3 cp $VERSION_HELPER versionhelper.sh; chmod +x versionhelper.sh; . ./versionhelper.sh #determine semver and create buildinfo.json
       
       - export specifier=$(case $qualifier in "build") echo "$VERSION-$qualifier.$CODEBUILD_BUILD_NUMBER" ;; "release") echo "$VERSION" ;; "*") echo "$VERSION-$qualifier" ;; esac)
@@ -69,11 +106,13 @@ phases:
       # - sed -i 's/VERSIONREPLACE/'$ELEVEN_VERSION_BUILD'/g' serverless.yml
   build:
     commands:
-      - dotnet sonarscanner begin /o:$GITHUB_ACCOUNT /k:${GITHUB_ACCOUNT}_$project /d:sonar.host.url=https://sonarcloud.io  /d:sonar.login=$SONAR_TOKEN /d:sonar.cs.opencover.reportsPaths="${CODEBUILD_SRC_DIR}/coverage.xml" /d:sonar.coverage.exclusions="**Test*.cs" $SQ_ANALYSIS_PARAMS
+      - dotnet sonarscanner begin /o:$GITHUB_ACCOUNT /k:${GITHUB_ACCOUNT}_$project /d:sonar.host.url=https://sonarcloud.io  /d:sonar.login=$SONAR_TOKEN /d:sonar.cs.opencover.reportsPaths="${CODEBUILD_SRC_DIR}/coverage.opencover.xml" /d:sonar.coverage.exclusions="**Test*.cs" $SQ_ANALYSIS_PARAMS
       - echo "Starting build..."              
       - aws s3 cp $VERSION_HELPER versionhelper.sh; chmod +x versionhelper.sh; . ./versionhelper.sh 
       - sam build --template $TEMPLATE_PATH  
-      - dotnet test /p:CollectCoverage=true /p:CoverletOutputFormat=opencover /p:CoverletOutputVerbosity=detailed /p:CoverletOutput="${CODEBUILD_SRC_DIR}/coverage.xml" /p:Exclude="[Tests]*"
+      - echo "Running unit tests..."
+      - dotnet test --settings ./coverage.runsettings --collect:"XPlat Code Coverage"
+      - cp $(find ${CODEBUILD_SRC_DIR}/coverage -name "coverage.opencover.xml") ${CODEBUILD_SRC_DIR}/coverage.opencover.xml
       - dotnet sonarscanner end /d:sonar.token=$SONAR_TOKEN
       - sam package --s3-bucket $ARTIFACT_BUCKET-us-east-1 --kms-key-id $KMS_KEY_ID_EAST_1 --region us-east-1 --s3-prefix SAM/$PROJECT/$ELEVEN_VERSION_FULL --output-template-file packaged_template-us-east-1.yml
       - sam package --s3-bucket $ARTIFACT_BUCKET-us-east-2 --kms-key-id $KMS_KEY_ID_EAST_2 --region us-east-2 --s3-prefix SAM/$PROJECT/$ELEVEN_VERSION_FULL --output-template-file packaged_template-us-east-2.yml
