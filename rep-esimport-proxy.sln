@@ -11,13 +11,18 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "test", "test", "{3A57C52F-A
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ClientTrackingSQSLambda.Tests", "test\ClientTrackingSQSLambda.Tests\ClientTrackingSQSLambda.Tests.csproj", "{BF738593-E312-4874-9A5E-E59415F13559}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Events.Core", "src\Events.Core\Events.Core.csproj", "{EC0F7D50-DA38-60CA-CA3B-BA29316A756D}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{8EC462FD-D22E-90A8-E5CE-7E832BA40C5D}"
+	ProjectSection(SolutionItems) = preProject
+		buildspec.yml = buildspec.yml
+		serverless.yml = serverless.yml
+	EndProjectSection
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
 		Release|Any CPU = Release|Any CPU
-	EndGlobalSection
-	GlobalSection(SolutionProperties) = preSolution
-		HideSolutionNode = FALSE
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
 		{9E2B29C6-C98F-482D-9C8C-0002F499018A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
@@ -28,9 +33,20 @@ Global
 		{BF738593-E312-4874-9A5E-E59415F13559}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{BF738593-E312-4874-9A5E-E59415F13559}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{BF738593-E312-4874-9A5E-E59415F13559}.Release|Any CPU.Build.0 = Release|Any CPU
+		{EC0F7D50-DA38-60CA-CA3B-BA29316A756D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{EC0F7D50-DA38-60CA-CA3B-BA29316A756D}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{EC0F7D50-DA38-60CA-CA3B-BA29316A756D}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{EC0F7D50-DA38-60CA-CA3B-BA29316A756D}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{9E2B29C6-C98F-482D-9C8C-0002F499018A} = {8DE7C1B7-19B0-4E15-99D7-49D0E6EA91A2}
 		{BF738593-E312-4874-9A5E-E59415F13559} = {3A57C52F-AA0E-4200-94DA-6E225BCE65A7}
+		{EC0F7D50-DA38-60CA-CA3B-BA29316A756D} = {8DE7C1B7-19B0-4E15-99D7-49D0E6EA91A2}
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {7F3EACA8-AE4D-4CF3-9152-C8CB14EABBA7}
 	EndGlobalSection
 EndGlobal

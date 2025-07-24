@@ -2,6 +2,24 @@ AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
 Description: SAM template for the rep-esimport-proxy service in C#.
 Parameters:
+  EventBusTopicArn:
+    Type: String
+    Description: ARN of the Eleven Event Bus SNS topic to subscribe to
+  LogStreamName:
+    Type: String
+    Default: 'applog-stream'
+  LogLevel:
+    Type: String
+    Default: 'INFO'
+    Description: Log level for the Lambda functions
+  LogRetentionDays:
+    Type: Number
+    Default: 14
+    Description: Number of days to retain logs in CloudWatch Logs
+  ClientTrackingPartitionCount:
+    Type: Number
+    Default: 10
+    Description: Number of partitions to create for PK in the ClientTrackingTable
   QueueName:
     Type: String
     Description: Name of the SQS queue for receiving messages from SNS.
@@ -13,10 +31,6 @@ Parameters:
   EventsBusAccount:
     Type: String
     Description: AWS account ID for the SNS topic.
-  LogStreamName:
-    Type: String
-    Description: Name of the Firehose delivery stream for logging.
-    Default: applog-stream
 Globals:
   Function:
     Timeout: 60
@@ -34,10 +48,31 @@ Resources:
         deadLetterTargetArn: !GetAtt ClientTrackingDLQ.Arn
         maxReceiveCount: 5
 
+  # Allow SNS topic to SendMessage to the queue
+  ClientTrackingQueuePolicy:
+    Type: AWS::SQS::QueuePolicy
+    Properties:
+      Queues:
+        - !Ref ClientTrackingSQSQueue
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AllowSQSToSendMessage
+            Effect: Allow
+            Principal: '*'
+            Action: 
+              - sqs:SendMessage
+              - sqs:GetQueueAttributes
+            Resource: !GetAtt ClientTrackingSQSQueue.Arn
+            Condition:
+              ArnEquals:
+                aws:SourceArn: !Ref EventBusTopicArn
+
   # Dead Letter Queue for SQS
   ClientTrackingDLQ:
     Type: AWS::SQS::Queue
     Properties: 
+      MessageRetentionPeriod: 1209600  # 1,209,600 seconds (14 days)
       QueueName: !Sub "${AWS::StackName}-dlq"
 
   # SNS Subscription
@@ -51,7 +86,6 @@ Resources:
       FilterPolicy:
         event: 
           - client-tracking
-            
 
   # DynamoDB Table to store client tracking data
   ClientTrackingTable:
@@ -103,18 +137,42 @@ Resources:
   ClientTrackingProcessorLambda:
     Type: AWS::Serverless::Function
     Properties:
+      Runtime: dotnet8
       FunctionName: client-tracking-processor
-      Handler: rep-esimport-proxy::ClientTrackingSQSLambda.Function::FunctionHandler  
+      Handler: rep-esimport-proxy::ClientTrackingSQSLambda.ClientTrackingLambda::FunctionHandlerAsync  
       Role: !GetAtt LambdaExecutionRole.Arn
       CodeUri: ./src/ClientTrackingSQSLambda/
-      Environment:
-        Variables:
-          DYNAMODB_TABLE_NAME: !Ref ClientTrackingTable
       Events:
         SQSTrigger:
           Type: SQS
           Properties:
             Queue: !GetAtt ClientTrackingSQSQueue.Arn
+            BatchSize: 10
+      Environment:
+        Variables:
+          DYNAMODB_TABLE_NAME: !Ref ClientTrackingTable
+          CLIENT_TRACKING_PARTITION_COUNT: !Ref ClientTrackingPartitionCount
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ClientTrackingTable
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - sqs:ReceiveMessage
+                - sqs:DeleteMessage
+                - sqs:GetQueueAttributes
+              Resource: !GetAtt ClientTrackingSQSQueue.Arn
+            - Effect: Allow
+              Action:
+                - firehose:PutRecord
+              Resource: !Sub 'arn:aws:firehose:${AWS::Region}:${AWS::AccountId}:deliverystream/${LogStreamName}'
+            - Effect: Allow
+              Action:
+                - logs:CreateLogGroup
+                - logs:CreateLogStream
+                - logs:PutLogEvents
+              Resource: !Sub 'arn:aws:logs:*:*:*'
 
 # CloudWatch Alarms for Lambda function
   LambdaErrorAlarm:

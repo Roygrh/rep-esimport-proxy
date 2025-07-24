@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: "2010-09-09"
-Description: "UPDATE ME"
+Description: "Build pipeline for client tracking events microservice"
 Parameters:
   TemplateUrlSSM:
     Type: AWS::SSM::Parameter::Value<String>
@@ -33,5 +33,51 @@ Resources:
         Datadog: false
         DevelopmentParameters: |
           {
-            "EventsBusAccount": "489354756207"
+            "EventBusTopicArn": "arn:aws:sns:us-west-2:512337418224:eleven-event-bus-receive",
+            "EventsBusAccount": "512337418224",
+            "LogLevel": "DEBUG"
+          }
+    Staging: 
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: !Ref TemplateUrlSSM
+      Parameters:
+        GithubRepository: rep-esimport-proxy
+        GithubBranch: next
+        StackName: rep-esimport-proxy
+        DotNetRuntime: '8.0'
+        SlackEmail: ''
+        CustomBuildspec: true
+        StagingAccount:  !FindInMap [AccountMapping, Reporting, Staging]
+        DeleteStagingStackUponApproval: false
+        ServiceGroup: rep-esimport-proxy
+        Contact: reporting 
+        Datadog: false
+        StagingParameters: |
+          {
+            "EventBusTopicArn": "arn:aws:sns:us-west-2:265848155493:eleven-event-bus-receive",
+            "EventsBusAccount": "265848155493",
+            "LogLevel": "DEBUG"
+          }
+    Production:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: !Ref TemplateUrlSSM
+      Parameters:
+        GithubRepository: rep-esimport-proxy
+        GithubBranch: main
+        StackName: rep-esimport-proxy
+        DotNetRuntime: '8.0'
+        SlackEmail: ''
+        CustomBuildspec: true
+        ProductionAccount:  !FindInMap [AccountMapping, Reporting, Production]
+        DeleteProductionStackUponApproval: false
+        ServiceGroup: rep-esimport-proxy
+        Contact: reporting
+        Datadog: false
+        ProductionParameters: |
+          {
+            "EventBusTopicArn": "arn:aws:sns:us-west-2:421870691823:eleven-event-bus-receive",
+            "EventsBusAccount": "421870691823",
+            "LogLevel": "DEBUG"
           }
