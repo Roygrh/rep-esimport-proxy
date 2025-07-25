@@ -20,10 +20,6 @@ Parameters:
     Type: Number
     Default: 10
     Description: Number of partitions to create for PK in the ClientTrackingTable
-  QueueName:
-    Type: String
-    Description: Name of the SQS queue for receiving messages from SNS.
-    Default: client-tracking-sqs-queue
   EventsBusName:
     Type: String
     Description: Name of the SNS topic for receiving events.
@@ -139,7 +135,7 @@ Resources:
     Properties:
       Runtime: dotnet8
       FunctionName: client-tracking-processor
-      Handler: rep-esimport-proxy::ClientTrackingSQSLambda.ClientTrackingLambda::FunctionHandlerAsync  
+      Handler: ClientTrackingSQSLambda::ClientTrackingSQSLambda.ClientTrackingLambda::FunctionHandlerAsync
       Role: !GetAtt LambdaExecutionRole.Arn
       CodeUri: ./src/ClientTrackingSQSLambda/
       Events:

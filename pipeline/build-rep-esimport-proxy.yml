@@ -21,7 +21,7 @@ Resources:
       TemplateURL: !Ref TemplateUrlSSM
       Parameters:
         GithubRepository: rep-esimport-proxy
-        GithubBranch: develop
+        GithubBranch: REP-1065-ClientTrackingConsumer
         StackName: rep-esimport-proxy
         DotNetRuntime: '8.0'
         SlackEmail: ''
@@ -37,7 +37,7 @@ Resources:
             "EventsBusAccount": "512337418224",
             "LogLevel": "DEBUG"
           }
-    Staging: 
+  Staging: 
     Type: AWS::CloudFormation::Stack
     Properties:
       TemplateURL: !Ref TemplateUrlSSM
@@ -49,7 +49,6 @@ Resources:
         SlackEmail: ''
         CustomBuildspec: true
         StagingAccount:  !FindInMap [AccountMapping, Reporting, Staging]
-        DeleteStagingStackUponApproval: false
         ServiceGroup: rep-esimport-proxy
         Contact: reporting 
         Datadog: false
@@ -59,7 +58,7 @@ Resources:
             "EventsBusAccount": "265848155493",
             "LogLevel": "DEBUG"
           }
-    Production:
+  Production:
     Type: AWS::CloudFormation::Stack
     Properties:
       TemplateURL: !Ref TemplateUrlSSM
@@ -71,7 +70,6 @@ Resources:
         SlackEmail: ''
         CustomBuildspec: true
         ProductionAccount:  !FindInMap [AccountMapping, Reporting, Production]
-        DeleteProductionStackUponApproval: false
         ServiceGroup: rep-esimport-proxy
         Contact: reporting
         Datadog: false
@@ -79,5 +77,5 @@ Resources:
           {
             "EventBusTopicArn": "arn:aws:sns:us-west-2:421870691823:eleven-event-bus-receive",
             "EventsBusAccount": "421870691823",
-            "LogLevel": "DEBUG"
+            "LogLevel": "WARN"
           }
