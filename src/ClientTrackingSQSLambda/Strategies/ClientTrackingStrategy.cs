@@ -10,6 +10,7 @@ namespace ClientTrackingSQSLambda.Strategies
     {
         private readonly IDynamoDbClientWrapper _dynamoDbClient;
         private readonly ILog _logger;
+        private bool _alreadyDisposed = false;
         private readonly string _tableName = Environment.GetEnvironmentVariable("DYNAMODB_TABLE_NAME")
         ?? throw new InvalidOperationException("DYNAMODB_TABLE_NAME environment variable not set");
         private readonly int _partitionCount = int.Parse(Environment.GetEnvironmentVariable("CLIENT_TRACKING_PARTITION_COUNT")
@@ -172,9 +173,22 @@ namespace ClientTrackingSQSLambda.Strategies
 
         public void Dispose()
         {
-            throw new NotImplementedException();
+            Dispose(true);
+            GC.SuppressFinalize(this);
         }
 
+        protected virtual void Dispose(bool disposing)
+        {
+            if (_alreadyDisposed)
+            {
+                return;
+            }
 
+            if (disposing)
+            {
+                _dynamoDbClient?.Dispose();
+            }
+            _alreadyDisposed = true;
+        }
     }
 }

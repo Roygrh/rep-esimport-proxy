@@ -269,5 +269,15 @@ namespace Events.Core.Tests
             _mockSqsClient.Verify(s => s.SendMessageAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Once);
             _mockSqsClient.Verify(s => s.DeleteSqsMessageAsync(It.IsAny<SQSEvent.SQSMessage>(), It.IsAny<CancellationToken>()), Times.Once);
         }
+
+        [Test]
+        public void RegisterService_ReturnsFalse_WhenServiceIsNull()
+        {
+            // Act
+            var result = EventProcessor.RegisterService<object>(null);
+
+            // Assert
+            Assert.That(result.Equals(false));
+        }
     }
 }

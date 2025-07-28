@@ -22,11 +22,12 @@ namespace ClientTrackingSQSLambda.Tests;
 [TestFixture]
 public class ClientTrackingLambdaTest
 {
-    private Mock<IAmazonDynamoDB> _mockDynamoDbClient;
+    private Mock<IDynamoDbClientWrapper> _mockDynamoDbClient;
     private Mock<ISqsClientWrapper> _mockSqsClient;
     private Mock<ILambdaContext> _mockLambdaContext;
     private Mock<IAmazonEventBridge> _mockEventBridge;
     private Mock<ILog> _mockLogger;
+    private Mock<IServiceProvider> _mockServiceProvider;
     private EventProcessor _EventHandler;
     private readonly string _defaultOrgNumber = "AB-123-45";
     private readonly TestTools _testTools = new();
@@ -39,11 +40,12 @@ public class ClientTrackingLambdaTest
         Environment.SetEnvironmentVariable("CLIENT_TRACKING_PARTITION_COUNT", "10");
         Environment.SetEnvironmentVariable("EVENTS_DLQ_URL", "some.dlq.url.com");
         AWSConfigs.AWSRegion = "us-west-2";
-        _mockDynamoDbClient = new Mock<IAmazonDynamoDB>();
         _mockSqsClient = new Mock<ISqsClientWrapper>();
         _mockLambdaContext = new Mock<ILambdaContext>();
         _mockEventBridge = new Mock<IAmazonEventBridge>();
         _mockLogger = new Mock<ILog>();
+        _mockDynamoDbClient = new Mock<IDynamoDbClientWrapper>();
+        _mockServiceProvider = new Mock<IServiceProvider>();
         EventProcessor.RegisterService<ISqsClientWrapper>(_mockSqsClient.Object);
         EventProcessor.RegisterService<ILog>(_mockLogger.Object);
 
@@ -86,7 +88,61 @@ public class ClientTrackingLambdaTest
         _mockSqsClient.Setup(c => c.DeleteSqsMessageAsync(It.IsAny<SQSMessage>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new DeleteMessageResponse { HttpStatusCode = System.Net.HttpStatusCode.OK });
 
-        var clientTrackingLambda = new ClientTrackingLambda(new DynamoDbClientWrapper(_mockDynamoDbClient.Object));
+        var clientTrackingLambda = new ClientTrackingLambda(_mockDynamoDbClient.Object);
+        await clientTrackingLambda.FunctionHandlerAsync(sqsEvent, _mockLambdaContext.Object);
+
+        // Assert
+        _mockDynamoDbClient.Verify(c => c.PutItemAsync(It.IsAny<PutItemRequest>(), It.IsAny<CancellationToken>()), Times.Once);
+        _mockSqsClient.Verify(c => c.DeleteSqsMessageAsync(It.IsAny<SQSMessage>(), It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Test]
+    public async Task ProcessEventAsync_NoRecords()
+    {
+        // Arrange
+        var snsEvent = _testTools.GetRandomClientTrackingEvent();
+        snsEvent.OrgNumber = _defaultOrgNumber;
+        var sqsEvent = new SQSEvent
+        {
+            Records =[]
+        };
+
+        var clientTrackingLambda = new ClientTrackingLambda(_mockDynamoDbClient.Object);
+        await clientTrackingLambda.FunctionHandlerAsync(sqsEvent, _mockLambdaContext.Object);
+
+        // Assert
+        _mockDynamoDbClient.Verify(c => c.PutItemAsync(It.IsAny<PutItemRequest>(), It.IsAny<CancellationToken>()), Times.Never);
+        _mockSqsClient.Verify(c => c.DeleteSqsMessageAsync(It.IsAny<SQSMessage>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Test]
+    public async Task ProcessEventAsync_ErrorDeletingFromSQS()
+    {
+        // Arrange
+        var snsEvent = _testTools.GetRandomClientTrackingEvent();
+        snsEvent.OrgNumber = _defaultOrgNumber;
+        var sqsEvent = new SQSEvent
+        {
+            Records =
+            [
+                new SQSMessage
+                {
+                    EventSource = "aws:sqs",
+                    AwsRegion = "us-west-2",
+                    Body = JsonSerializer.Serialize(snsEvent),
+                    EventSourceArn = "arn:aws:sqs:us-west-2:123456789012:YourQueueName",
+                    ReceiptHandle = "someReceiptHandle"
+                }
+            ]
+        };
+        double remainingTime = 600; // 5 minutes in seconds
+        _mockLambdaContext.SetupGet(c => c.RemainingTime).Returns(TimeSpan.FromSeconds(remainingTime));
+        _mockDynamoDbClient.Setup(d => d.UpdateItemAsync(It.IsAny<UpdateItemRequest>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new UpdateItemResponse { HttpStatusCode = System.Net.HttpStatusCode.OK });
+        _mockSqsClient.Setup(c => c.DeleteSqsMessageAsync(It.IsAny<SQSMessage>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new DeleteMessageResponse { HttpStatusCode = System.Net.HttpStatusCode.InternalServerError });
+
+        var clientTrackingLambda = new ClientTrackingLambda(_mockDynamoDbClient.Object);
         await clientTrackingLambda.FunctionHandlerAsync(sqsEvent, _mockLambdaContext.Object);
 
         // Assert
@@ -100,19 +156,15 @@ public class ClientTrackingLambdaTest
         // Arrange
         var evt = _testTools.GetRandomClientTrackingEvent();
         evt.OrgNumber = _defaultOrgNumber;
-        var ddb = Mock.Of<IDynamoDbClientWrapper>();
-        var logger = Mock.Of<ILog>();
-        var serviceProvider = new Mock<IServiceProvider>();
 
         // Null service provider
         Assert.Throws<ArgumentNullException>(() => evt.GetEventProcessor(null!));
 
         // Null ddb
-        serviceProvider.Setup(sp => sp.GetService(typeof(IDynamoDbClientWrapper))).Returns((object?)null);
-        serviceProvider.Setup(sp => sp.GetService(typeof(ILog))).Returns(logger);
-        Assert.Throws<ArgumentNullException>(() => evt.GetEventProcessor(serviceProvider.Object));
+        _mockServiceProvider.Setup(sp => sp.GetService(typeof(IDynamoDbClientWrapper))).Returns((object?)null);
+        _mockServiceProvider.Setup(sp => sp.GetService(typeof(ILog))).Returns(_mockLogger.Object);
+        Assert.Throws<ArgumentNullException>(() => evt.GetEventProcessor(_mockServiceProvider.Object));
     }
-
 
     [Test]
     public void EventProcessor_ThrowsIfLoggerNotRegistered()
@@ -136,7 +188,7 @@ public class ClientTrackingLambdaTest
     {
         // Arrange
         var sqsEvent = new SQSEvent { Records = [] };
-        var clientTrackingLambda = new ClientTrackingLambda(new DynamoDbClientWrapper(_mockDynamoDbClient.Object));
+        var clientTrackingLambda = new ClientTrackingLambda(_mockDynamoDbClient.Object);
         // Act
         await _EventHandler.ProcessEventAsync(sqsEvent, _mockLambdaContext.Object);
 
@@ -147,9 +199,7 @@ public class ClientTrackingLambdaTest
     [Test]
     public async Task ProcessEventDataAsync_InvalidEventType_LogsErrorAndReturnsSuccess()
     {
-        var mockLogger = new Mock<ILog>();
-        var mockDynamoDb = new Mock<IDynamoDbClientWrapper>();
-        var strategy = new ClientTrackingStrategy(mockDynamoDb.Object, mockLogger.Object);
+        var strategy = new ClientTrackingStrategy(_mockDynamoDbClient.Object, _mockLogger.Object);
 
         // Pass an event that is NOT a ClientTrackingEvent
         var invalidEvent = new Mock<IEventBusMessage>().Object;
@@ -158,15 +208,13 @@ public class ClientTrackingLambdaTest
 
         Assert.That(result.Success);
         StringAssert.Contains("Invalid event", result.Details);
-        mockLogger.Verify(l => l.Error(It.IsAny<string>()), Times.Once);
+        _mockLogger.Verify(l => l.Error(It.IsAny<string>()), Times.Once);
     }
 
     [Test]
     public async Task ProcessEventDataAsync_MissingOrgNumber_LogsErrorAndReturnsSuccess()
-    {
-        var mockLogger = new Mock<ILog>();
-        var mockDynamoDb = new Mock<IDynamoDbClientWrapper>();
-        var strategy = new ClientTrackingStrategy(mockDynamoDb.Object, mockLogger.Object);
+    { 
+        var strategy = new ClientTrackingStrategy(_mockDynamoDbClient.Object, _mockLogger.Object);
 
         var evt = new ClientTrackingEvent
         {
@@ -179,15 +227,13 @@ public class ClientTrackingLambdaTest
 
         Assert.That(result.Success);
         StringAssert.Contains("Invalid event", result.Details);
-        mockLogger.Verify(l => l.Error(It.IsAny<object>()), Times.Once);
+        _mockLogger.Verify(l => l.Error(It.IsAny<object>()), Times.Once);
     }
 
     [Test]
     public async Task ProcessEventDataAsync_MissingTimeZoneId_LogsErrorAndReturnsSuccess()
     {
-        var mockLogger = new Mock<ILog>();
-        var mockDynamoDb = new Mock<IDynamoDbClientWrapper>();
-        var strategy = new ClientTrackingStrategy(mockDynamoDb.Object, mockLogger.Object);
+        var strategy = new ClientTrackingStrategy(_mockDynamoDbClient.Object, _mockLogger.Object);
 
         var evt = new ClientTrackingEvent
         {
@@ -200,15 +246,13 @@ public class ClientTrackingLambdaTest
 
         Assert.That(result.Success);
         StringAssert.Contains("Invalid event", result.Details);
-        mockLogger.Verify(l => l.Error(It.IsAny<object>()), Times.Once);
+        _mockLogger.Verify(l => l.Error(It.IsAny<object>()), Times.Once);
     }
 
     [Test]
     public async Task ProcessEventDataAsync_MissingMacAddress_LogsErrorAndReturnsSuccess()
     {
-        var mockLogger = new Mock<ILog>();
-        var mockDynamoDb = new Mock<IDynamoDbClientWrapper>();
-        var strategy = new ClientTrackingStrategy(mockDynamoDb.Object, mockLogger.Object);
+        var strategy = new ClientTrackingStrategy(_mockDynamoDbClient.Object, _mockLogger.Object);
 
         var evt = new ClientTrackingEvent
         {
@@ -221,16 +265,14 @@ public class ClientTrackingLambdaTest
 
         Assert.That(result.Success);
         StringAssert.Contains("Invalid event", result.Details);
-        mockLogger.Verify(l => l.Error(It.IsAny<object>()), Times.Once);
+        _mockLogger.Verify(l => l.Error(It.IsAny<object>()), Times.Once);
     }
 
     [Test]
     public async Task ProcessEventDataAsync_DynamoDbThrows_LogsErrorAndReturnsFailure()
     {
         // Arrange
-        var mockLogger = new Mock<ILog>();
-        var mockDynamoDb = new Mock<IDynamoDbClientWrapper>();
-        var strategy = new ClientTrackingStrategy(mockDynamoDb.Object, mockLogger.Object);
+        var strategy = new ClientTrackingStrategy(_mockDynamoDbClient.Object, _mockLogger.Object);
 
         var evt = new ClientTrackingEvent
         {
@@ -241,7 +283,7 @@ public class ClientTrackingLambdaTest
         };
 
         var exception = new Exception("DynamoDB failure");
-        mockDynamoDb
+        _mockDynamoDbClient
             .Setup(d => d.PutItemAsync(It.IsAny<PutItemRequest>(), It.IsAny<CancellationToken>()))
             .ThrowsAsync(exception);
 
@@ -251,9 +293,83 @@ public class ClientTrackingLambdaTest
         // Assert
         Assert.That(!result.Success);
         StringAssert.Contains("Error saving to DynamoDB", result.Details);
-        mockLogger.Verify(
+        _mockLogger.Verify(
             l => l.Error("Failed to save client event to DynamoDB", exception),
             Times.Once);
+    }
+
+    [Test]
+    public void ClientTrackingLambda_ParameterlessConstructor_CreatesInstance()
+    {
+        // Act
+        var lambda = new ClientTrackingLambda();
+
+        // Assert
+        Assert.That(lambda, Is.Not.Null);
+        Assert.That(lambda, Is.InstanceOf<ClientTrackingLambda>());
+    }
+
+    [Test]
+    public void Dispose_CallsDisposeOnDynamoDbClientWrapper()
+    {
+        // Arrange
+        var strategy = new ClientTrackingStrategy(_mockDynamoDbClient.Object, _mockLogger.Object);
+
+        // Act
+        strategy.Dispose();
+
+        // Assert
+        _mockDynamoDbClient.Verify(d => d.Dispose(), Times.Once);
+    }
+
+    [Test]
+    public void Dispose_CallsDisposeOnDynamoDbClientWrapper_nullDynamoDb()
+    {
+        // Arrange
+        var strategy = new ClientTrackingStrategy(null, _mockLogger.Object);
+
+        // Act
+        strategy.Dispose();
+
+        // Assert
+        _mockDynamoDbClient.Verify(d => d.Dispose(), Times.Never);
+    }
+
+    [Test]
+    public void Dispose_CanBeCalledMultipleTimes_SafeAndIdempotent()
+    {
+        // Arrange
+        var strategy = new ClientTrackingStrategy(_mockDynamoDbClient.Object, _mockLogger.Object);
+
+        // Act
+        strategy.Dispose();
+        strategy.Dispose(); // Should not throw or call Dispose again
+
+        // Assert
+        _mockDynamoDbClient.Verify(d => d.Dispose(), Times.Once);
+    }
+
+    [Test]
+    public void ExtractEventMessageFromSQS_DoesNotThrowIfNoMessageProperty()
+    {
+        // Test that an empty body does not throw.
+        var result = string.Empty.DeserializeSafe<IEventBusMessage>();
+        Assert.That(result, Is.Null, "Expected null result for empty body");
+    }
+
+    [Test]
+    public void ExtractEventMessageFromSQS_DoesNotThrowOnInvalidJson()
+    {
+        "not-json".DeserializeSafe<IEventBusMessage>();
+        Assert.Pass("Deserialization of invalid JSON did not throw as expected.");
+    }
+
+    [Test]
+    public void ExtractEventMessageFromSQS_DeserializesNonPolymorphicType()
+    {
+        var payload = new { Foo = "Bar" };
+        var result = JsonSerializer.Serialize(payload).DeserializeSafe<dynamic>();
+        Assert.That(result?.Foo?.ToString(), Is.EqualTo("Bar"));
     }
 }
 
