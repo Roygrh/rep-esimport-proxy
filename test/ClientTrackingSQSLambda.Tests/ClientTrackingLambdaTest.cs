@@ -35,8 +35,8 @@ public class ClientTrackingLambdaTest
     public void Setup()
     {
         // Arrange common environment and mocks
-        Environment.SetEnvironmentVariable("AGGREGATES_TABLE", "AggregatesTable");
-        Environment.SetEnvironmentVariable("EXPORT_GSI_PARTITION_COUNT", "10");
+        Environment.SetEnvironmentVariable("DYNAMODB_TABLE_NAME", "client-tracking-data");
+        Environment.SetEnvironmentVariable("CLIENT_TRACKING_PARTITION_COUNT", "10");
         Environment.SetEnvironmentVariable("EVENTS_DLQ_URL", "some.dlq.url.com");
         AWSConfigs.AWSRegion = "us-west-2";
         _mockDynamoDbClient = new Mock<IAmazonDynamoDB>();
