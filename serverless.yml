@@ -94,45 +94,15 @@ Resources:
         AttributeName: ttl
         Enabled: true
 
-  LambdaExecutionRole:
-    Type: AWS::IAM::Role
-    Properties:
-      RoleName: rep-esimport-proxy-lambda-role
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: lambda.amazonaws.com
-            Action: sts:AssumeRole
-      Policies:
-        - PolicyName: LambdaSQSAccessPolicy
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - sqs:ReceiveMessage
-                  - sqs:DeleteMessage
-                  - sqs:GetQueueAttributes
-                Resource: !GetAtt ClientTrackingSQSQueue.Arn
-              - Effect: Allow
-                Action:
-                  - dynamodb:PutItem
-                Resource: !GetAtt ClientTrackingTable.Arn
-              - Effect: Allow
-                Action:
-                  - firehose:PutRecord
-                Resource: !Sub 'arn:aws:firehose:${AWS::Region}:${AWS::AccountId}:deliverystream/${LogStreamName}'
-
   ClientTrackingProcessorLambda:
     Type: AWS::Serverless::Function
     Properties:
       Runtime: dotnet8
       FunctionName: client-tracking-processor
       Handler: ClientTrackingSQSLambda::ClientTrackingSQSLambda.ClientTrackingLambda::FunctionHandlerAsync
-      Role: !GetAtt LambdaExecutionRole.Arn
       CodeUri: ./src/ClientTrackingSQSLambda/
+      LoggingConfig:
+        LogGroup: !Ref EsImportClientTrackingLambdaLogGroup
       Events:
         SQSTrigger:
           Type: SQS
@@ -143,6 +113,7 @@ Resources:
         Variables:
           DYNAMODB_TABLE_NAME: !Ref ClientTrackingTable
           CLIENT_TRACKING_PARTITION_COUNT: !Ref ClientTrackingPartitionCount
+          EVENTS_DLQ_URL: !Ref ClientTrackingDLQ
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref ClientTrackingTable
@@ -164,6 +135,12 @@ Resources:
                 - logs:CreateLogStream
                 - logs:PutLogEvents
               Resource: !Sub 'arn:aws:logs:*:*:*'
+
+  EsImportClientTrackingLambdaLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${AWS::StackName}-EsImportClientTrackingLambda"
+      RetentionInDays: !Ref LogRetentionDays
 
 # CloudWatch Alarms for Lambda function
   LambdaErrorAlarm:
