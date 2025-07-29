@@ -124,6 +124,7 @@ Resources:
                 - sqs:ReceiveMessage
                 - sqs:DeleteMessage
                 - sqs:GetQueueAttributes
+                - sqs:sendmessage
               Resource: !GetAtt ClientTrackingSQSQueue.Arn
             - Effect: Allow
               Action:
