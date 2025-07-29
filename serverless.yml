@@ -2,9 +2,6 @@ AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
 Description: SAM template for the rep-esimport-proxy service in C#.
 Parameters:
-  EventBusTopicArn:
-    Type: String
-    Description: ARN of the Eleven Event Bus SNS topic to subscribe to
   LogStreamName:
     Type: String
     Default: 'applog-stream'
@@ -61,7 +58,7 @@ Resources:
             Resource: !GetAtt ClientTrackingSQSQueue.Arn
             Condition:
               ArnEquals:
-                aws:SourceArn: !Ref EventBusTopicArn
+                aws:SourceArn: !Sub arn:aws:sns:${AWS::Region}:${EventsBusAccount}:${EventsBusName}
 
   # Dead Letter Queue for SQS
   ClientTrackingDLQ:
@@ -78,8 +75,8 @@ Resources:
       TopicArn: !Sub arn:aws:sns:${AWS::Region}:${EventsBusAccount}:${EventsBusName}
       FilterPolicyScope: MessageBody
       FilterPolicy:
-        event: 
-          - client-tracking
+        Subject:
+          - ClientTracking
 
   # DynamoDB Table to store client tracking data
   ClientTrackingTable:

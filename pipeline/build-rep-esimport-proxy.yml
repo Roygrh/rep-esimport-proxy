@@ -33,8 +33,7 @@ Resources:
         Datadog: false
         DevelopmentParameters: |
           {
-            "EventBusTopicArn": "arn:aws:sns:us-west-2:512337418224:eleven-event-bus-receive",
-            "EventsBusAccount": "512337418224",
+            "EventsBusAccount": "489354756207",
             "LogLevel": "DEBUG"
           }
   Staging: 
@@ -54,7 +53,6 @@ Resources:
         Datadog: false
         StagingParameters: |
           {
-            "EventBusTopicArn": "arn:aws:sns:us-west-2:265848155493:eleven-event-bus-receive",
             "EventsBusAccount": "265848155493",
             "LogLevel": "DEBUG"
           }
@@ -75,7 +73,6 @@ Resources:
         Datadog: false
         ProductionParameters: |
           {
-            "EventBusTopicArn": "arn:aws:sns:us-west-2:421870691823:eleven-event-bus-receive",
             "EventsBusAccount": "421870691823",
             "LogLevel": "WARN"
           }
