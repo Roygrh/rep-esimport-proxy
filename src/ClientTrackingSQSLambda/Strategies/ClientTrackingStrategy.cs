@@ -117,6 +117,7 @@ namespace ClientTrackingSQSLambda.Strategies
         {
             var item = new Dictionary<string, AttributeValue>
             {
+                ["ID"] = new AttributeValue { S = Guid.NewGuid().ToString() },
                 ["EventName"] = new AttributeValue { S = payload.EventName },
                 ["OrgNumber"] = new AttributeValue { S = payload.OrgNumber },
                 ["ExportPartition"] = new AttributeValue { S = GetExportPartitionShard() },
