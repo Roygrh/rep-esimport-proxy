@@ -125,7 +125,9 @@ Resources:
                 - sqs:DeleteMessage
                 - sqs:GetQueueAttributes
                 - sqs:SendMessage
-              Resource: !GetAtt ClientTrackingSQSQueue.Arn
+              Resource: 
+                - !GetAtt ClientTrackingSQSQueue.Arn
+                - !GetAtt ClientTrackingDLQ.Arn
             - Effect: Allow
               Action:
                 - firehose:PutRecord

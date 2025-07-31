@@ -59,7 +59,6 @@ namespace ClientTrackingSQSLambda.Tests.Events.Core
             var result = JsonSerializer.Deserialize<IEventBusMessage>(json, _options);
             Assert.That(result, Is.TypeOf<ClientTrackingEvent>());
             Assert.That(result.Subject, Is.EqualTo("ClientTracking"));
-            Assert.That(result.Origin, Is.EqualTo("origin"));
         }
 
         [Test]

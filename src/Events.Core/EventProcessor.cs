@@ -81,7 +81,17 @@ public class EventProcessor
         foreach (var sqsRecord in sqsEvent.Records)
         {
             // Use legacy JSON escaping fix before deserialization
+            logger.Warn(new
+            {
+                Message = "Sqs Record",
+                sqsRecord
+            });
             var correctedBody = sqsRecord.Body.CorrectJsonEscaping();
+            logger.Warn(new
+            {
+                Message = "correctedBody",
+                correctedBody
+            });
             var eventRecord = correctedBody.DeserializeSafe<IEventBusMessage>(logger);
             if (eventRecord == null)
             {
