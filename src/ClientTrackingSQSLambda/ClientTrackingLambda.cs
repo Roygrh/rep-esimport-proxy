@@ -39,6 +39,7 @@ public class ClientTrackingLambda : LoggedFunction<ClientTrackingLambda>
         await WithLogging(sqsEvent, context, async logger =>
         {
             EventProcessor.RegisterService<ILog>(logger);
+            EventProcessor.RegisterService<IMessageDeserializationService>(new MessageDeserializationService(logger));
             logger.Debug(new
             {
                 Message = "SaveClientTrackingLambda invoked",

@@ -1,16 +1,10 @@
-using System.Text.Json;
-using Amazon.DynamoDBv2.Model;
 using Amazon.Lambda.Core;
 using Amazon.Lambda.SQSEvents;
-using log4net;
-using Eleven.Logging.Lambda;
-using System.Text.RegularExpressions;
-using Newtonsoft.Json;
-using log4net.Util;
-using Events.Core.Contracts;
-using Events.Core;
-using Events.Core.Implementations;
 using Amazon.SQS;
+using Events.Core.Contracts;
+using Events.Core.Implementations;
+using log4net;
+using Newtonsoft.Json;
 
 namespace Events.Core;
 
@@ -24,6 +18,7 @@ public class EventProcessor
     // Table name from environment
     
     private readonly ISqsClientWrapper _sqsClient;
+    private IMessageDeserializationService _deserializationService;
     private readonly ILog logger;
     private readonly string _eventsDlqUrl = Environment.GetEnvironmentVariable("EVENTS_DLQ_URL")
         ?? throw new InvalidOperationException("EVENTS_DLQ_URL not in environment variables");
@@ -49,6 +44,13 @@ public class EventProcessor
             throw new InvalidOperationException("ILog service not registered in type registry. Please register ILog service before using EventProcessor.");
         }
         logger = log;
+
+        success = _typeRegistry.TryGetValue(typeof(IMessageDeserializationService), out var deserializationService);
+        if (!success || deserializationService == null || deserializationService is not IMessageDeserializationService deserializer)
+        {
+            deserializer = new MessageDeserializationService(logger); // Default implementation
+        }
+        _deserializationService = deserializer;
     }
 
 
@@ -80,22 +82,11 @@ public class EventProcessor
 
         foreach (var sqsRecord in sqsEvent.Records)
         {
-            // Use legacy JSON escaping fix before deserialization
-            logger?.Error(new
-            {
-                Message = "Sqs Record",
-                sqsRecord
-            });
-            var correctedBody = sqsRecord.Body.CorrectJsonEscaping();
-            logger?.Error(new
-            {
-                Message = "correctedBody",
-                correctedBody
-            });
-            var eventRecord = correctedBody.DeserializeSafe<IEventBusMessage>(logger);
+            //// Get the appropriate strategy for this event type
+            var eventRecord = _deserializationService.DeserializeMessage(sqsRecord.Body);
             if (eventRecord == null)
             {
-                logger?.Error(new
+                logger.Error(new
                 {
                     Message = "Failed to deserialize SQS record",
                     sqsRecord
@@ -106,6 +97,7 @@ public class EventProcessor
             // Get the appropriate strategy for this event type
             var serviceProvider = BuildServiceProvider();
             var strategy = eventRecord.GetEventProcessor(serviceProvider);
+
             try
             {
                 // Process event and get update payload

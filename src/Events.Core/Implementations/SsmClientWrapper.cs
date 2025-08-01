@@ -1,12 +1,12 @@
 ﻿using Amazon.SimpleSystemsManagement;
 using Amazon.SimpleSystemsManagement.Model;
-using log4net;
 using Events.Core.Contracts;
+using log4net;
 
 namespace Events.Core.Implementations;
 
 // Wrapper for AWS SSM client operations, providing safe, testable, and logged access to SSM.
-public class SsmClientWrapper : ISsmClientWrapper
+public partial class SsmClientWrapper : ISsmClientWrapper
 {
     // Underlying AWS SSM client
     private readonly IAmazonSimpleSystemsManagement _ssmClient;
