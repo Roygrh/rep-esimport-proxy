@@ -134,7 +134,7 @@ namespace ClientTrackingSQSLambda.Tests.Events.Core
 
             // Assert
             Assert.That(result, Is.Null);
-            _mockLogger.Verify(l => l.Error(It.IsAny<string>()), Times.Once);
+            _mockLogger.Verify(l => l.Error(It.IsAny<object>(), It.IsAny<Exception>()), Times.Once);
         }
     }
 }

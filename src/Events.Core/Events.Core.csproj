@@ -15,7 +15,8 @@
 
   <ItemGroup> 
     <PackageReference Include="Amazon.Lambda.Core" Version="2.5.1" /> 
-    <PackageReference Include="Amazon.Lambda.Serialization.SystemTextJson" Version="2.4.4" />
+    <PackageReference Include="Amazon.Lambda.Serialization.SystemTextJson" Version="2.4.4" /> 
+    <PackageReference Include="Amazon.Lambda.SNSEvents" Version="2.1.0" />
     <PackageReference Include="AWSSDK.DynamoDBv2" Version="3.7.301.15" />
     <PackageReference Include="AWSSDK.EventBridge" Version="3.7.406.2" />
     <PackageReference Include="Eleven.Logging.Lambda" Version="2.0.7" />

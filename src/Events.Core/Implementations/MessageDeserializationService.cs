@@ -1,4 +1,5 @@
-﻿using Events.Core.Contracts;
+﻿using Amazon.Lambda.SNSEvents;
+using Events.Core.Contracts;
 using Events.Core.Json;
 using log4net;
 using System.Text.Json;
@@ -32,55 +33,48 @@ public class MessageDeserializationService : IMessageDeserializationService
     {
         try
         {
-            // First, try to parse the message body as-is to check if it's valid JSON
-            JsonDocument? jsonDoc = null;
-            string bodyToParse = messageBody;
+            _logger.Debug(new
+            {
+                Message = "Processing message body",
+                OriginalBody = messageBody
+            });
 
+            // Try to parse as SNS notification first
+            var snsMessage = messageBody.DeserializeFromJsonSafe<SNSEvent.SNSMessage>(propertyNameCaseSensitive: false);
+            string messageToProcess;
+
+            if (snsMessage?.Type == "Notification" && !string.IsNullOrEmpty(snsMessage.Message))
+            {
+                // This is an SNS notification - extract the inner message
+                messageToProcess = snsMessage.Message;
+                _logger.Debug(new
+                {
+                    Message = "Detected SNS notification, extracting inner message",
+                    InnerMessage = messageToProcess
+                });
+            }
+            else
+            {
+                // This is a direct message or SNS parsing failed - try as direct message
+                messageToProcess = messageBody;
+                _logger.Debug("Processing as direct message");
+            }
+
+            // Try to deserialize the message content, with fallback to escape correction
+            IEventBusMessage? result = null;
             try
             {
-                jsonDoc = JsonDocument.Parse(messageBody);
+                result = JsonSerializer.Deserialize<IEventBusMessage>(messageToProcess, _jsonOptions);
             }
             catch (JsonException)
             {
-                // If parsing fails, try with JSON escaping correction
-                _logger.Debug("Initial parse failed, attempting with escape correction");
-                bodyToParse = messageBody.CorrectJsonEscaping();
-                jsonDoc = JsonDocument.Parse(bodyToParse);
+                // If that fails, try with escape correction
+                _logger.Debug("Initial deserialization failed, attempting with escape correction");
+                var correctedMessage = messageToProcess.CorrectJsonEscaping();
+                result = JsonSerializer.Deserialize<IEventBusMessage>(correctedMessage, _jsonOptions);
             }
 
-            using (jsonDoc)
-            {
-                var root = jsonDoc.RootElement;
-
-                _logger.Debug(new
-                {
-                    Message = "Successfully parsed JSON",
-                    ParsedBody = bodyToParse
-                });
-
-                // Check if this is an SNS notification by looking for Type and Message properties
-                if (root.TryGetProperty("Type", out var typeProperty) &&
-                    typeProperty.GetString() == "Notification" &&
-                    root.TryGetProperty("Message", out var messageProperty))
-                {
-                    // This is an SNS notification - extract the inner message
-                    var innerMessage = messageProperty.GetString();
-                    if (string.IsNullOrEmpty(innerMessage))
-                    {
-                        _logger.Error("SNS Message property is null or empty");
-                        return null;
-                    }
-
-                    // Deserialize the inner message as the actual event
-                    return JsonSerializer.Deserialize<IEventBusMessage>(innerMessage, _jsonOptions);
-                }
-                else
-                {
-                    // This is a direct message - deserialize as is
-                    _logger.Debug("Detected direct message, deserializing as-is");
-                    return JsonSerializer.Deserialize<IEventBusMessage>(bodyToParse, _jsonOptions);
-                }
-            }
+            return result;
         }
         catch (JsonException ex)
         {

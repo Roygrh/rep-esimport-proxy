@@ -5,6 +5,7 @@ using log4net;
 using System.Globalization;
 using System.Reflection;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 
 namespace Events.Core;
@@ -87,5 +88,39 @@ public static partial class Utils
     {
         // Create a cancellation token that will cancel when the Lambda function is about to timeout
         return new CancellationTokenSource(context.RemainingTime).Token;
+    }
+
+    /// <summary>
+    /// Safely deserializes a JSON string to the specified type with configurable options.
+    /// </summary>
+    /// <typeparam name="T">The target type to deserialize to.</typeparam>
+    /// <param name="toDeserialize">The JSON string to deserialize.</param>
+    /// <param name="ignoreNullFields">Whether to ignore null fields during serialization.</param>
+    /// <param name="propertyNameCaseSensitive">Whether property name matching is case sensitive.</param>
+    /// <returns>The deserialized object, or null if deserialization fails.</returns>
+    public static T? DeserializeFromJsonSafe<T>(
+        this string toDeserialize,
+        bool ignoreNullFields = false,
+        bool propertyNameCaseSensitive = true) where T : class
+    {
+        if (string.IsNullOrWhiteSpace(toDeserialize))
+            return null;
+
+        try
+        {
+            var options = new JsonSerializerOptions
+            {
+                DefaultIgnoreCondition = ignoreNullFields
+                    ? JsonIgnoreCondition.WhenWritingNull
+                    : JsonIgnoreCondition.Never,
+                PropertyNameCaseInsensitive = !propertyNameCaseSensitive,
+                AllowTrailingCommas = true,
+            };
+            return JsonSerializer.Deserialize<T>(toDeserialize, options);
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
     }
 }
